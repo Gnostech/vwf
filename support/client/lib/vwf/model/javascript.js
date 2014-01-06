@@ -562,11 +562,51 @@ node.hasOwnProperty( methodName ) ||  // TODO: recalculate as properties, method
 node.hasOwnProperty( eventName ) ||  // TODO: recalculate as properties, methods, events and children are created and deleted; properties take precedence over methods over events over children, for example
             createEventAccessor.call( this, node, eventName );
 
-            node.private.listeners[eventName] = [];
+            initializeListeners( node, eventName );
 
             // Invalidate the "future" cache.
 
             node.private.change++;
+
+        },
+
+        // -- addingEventListener ------------------------------------------------------------------
+
+        addingEventListener: function( nodeID, eventName, eventHandler, eventContext, eventPhases ) {  // TODO: context id
+
+            var node = this.nodes[nodeID];
+
+            var listeners = initializeListeners( node, eventName );
+
+            listeners.push( { handler: eventHandler, context: eventContext, phases: eventPhases } );  // TODO: context id
+
+        },
+
+        // -- removingEventListener ----------------------------------------------------------------
+
+        removingEventListener: function( nodeID, eventName, eventHandler ) {
+
+            var node = this.nodes[nodeID];
+
+            var listeners = initializeListeners( node, eventName );
+
+            node.private.listeners[eventName] = listeners.filter( function( listener ) {
+                return listener.handler !== eventHandler;
+            } );
+
+        },
+
+        // -- flushingEventListeners ---------------------------------------------------------------
+
+        flushingEventListeners: function( nodeID, eventName, eventContext ) {  // TODO: context id
+
+            var node = this.nodes[nodeID];
+
+            var listeners = initializeListeners( node, eventName );
+
+            node.private.listeners[eventName] = listeners.filter( function( listener ) {
+                return listener.context !== eventContext;  // TODO: context id
+            } );
 
         },
 
@@ -947,24 +987,18 @@ future.hasOwnProperty( eventName ) ||  // TODO: calculate so that properties tak
 
             set: unsettable ? undefined : function( value ) {  // `this` is the container
                 var node = this.node || this;  // the node via node.events.node, or just node
-                var listeners = node.private.listeners[eventName] ||
-                    ( node.private.listeners[eventName] = [] );  // array of { handler: function, context: node, phases: [ "phase", ... ] }
                 if ( typeof value == "function" || value instanceof Function ) {
-                    listeners.push( { handler: value, context: node } );  // for container.*event* = function() { ... }, context is the target node
+                    kernelDotAddEventListener.call( self, node.id, eventName, value, node );  // for container.*event* = function() { ... }, context is the target node
                 } else if ( value.add ) {
                     if ( ! value.phases || value.phases instanceof Array ) {
-                        listeners.push( { handler: value.handler, context: value.context, phases: value.phases } );
+                        kernelDotAddEventListener.call( self, node.id, eventName, value.handler, value.context, value.phases );
                     } else {
-                        listeners.push( { handler: value.handler, context: value.context, phases: [ value.phases ] } );
+                        kernelDotAddEventListener.call( self, node.id, eventName, value.handler, value.context, [ value.phases ] );
                     }
                 } else if ( value.remove ) {
-                    node.private.listeners[eventName] = listeners.filter( function( listener ) {
-                        return listener.handler !== value.handler;
-                    } );
+                    kernelDotRemoveEventListener.call( self, node.id, eventName, value.handler );
                 } else if ( value.flush ) {
-                    node.private.listeners[eventName] = listeners.filter( function( listener ) {
-                        return listener.context !== value.context;
-                    } );
+                    kernelDotFlushEventListeners.call( self, node.id, eventName, value.context );
                 }
             },
 
@@ -972,6 +1006,24 @@ future.hasOwnProperty( eventName ) ||  // TODO: calculate so that properties tak
 
         } );
 
+    }
+
+    // Stand-in for kernel.addEventListener().
+
+    function kernelDotAddEventListener( nodeID, eventName, eventHandler, eventContext, eventPhases ) {
+        this.addingEventListener( nodeID, eventName, eventHandler, eventContext, eventPhases );  // TODO: eventContextID
+    }
+
+    // Stand-in for kernel.removeEventListener().
+
+    function kernelDotRemoveEventListener( nodeID, eventName, eventHandler ) {
+        this.removingEventListener( nodeID, eventName, eventHandler );  // TODO: eventContextID
+    }
+
+    // Stand-in for kernel.flushEventListeners().
+
+    function kernelDotFlushEventListeners( nodeID, eventName, eventContext ) {
+        this.flushingEventListeners( nodeID, eventName, eventContext );  // TODO: eventContextID
     }
 
     // -- getterScript -----------------------------------------------------------------------------
@@ -1004,6 +1056,14 @@ future.hasOwnProperty( eventName ) ||  // TODO: calculate so that properties tak
             var bodyString = body.length ? " " + body + " " : "";
             return prefix + bodyString + suffix;
         }
+    }
+
+    // -- initializeListeners ----------------------------------------------------------------------
+
+    // Array of { handler: function, context: node, phases: [ "phase", ... ] }.
+
+    function initializeListeners( node, eventName ) {
+        return node.private.listeners[eventName] || ( node.private.listeners[eventName] = [] );
     }
 
     // -- findListeners ----------------------------------------------------------------------------
