@@ -51,6 +51,8 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
 
     var self;
 
+    var checkLights = true;
+
     return model.load( module, {
 
         // == Module Definition ====================================================================
@@ -66,7 +68,8 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
             this.state.scenes = {}; // id => { glgeDocument: new GLGE.Document(), glgeRenderer: new GLGE.Renderer(), glgeScene: new GLGE.Scene() }
             this.state.nodes = {}; // id => { name: string, glgeObject: GLGE.Object, GLGE.Collada, GLGE.Light, or other...? }
             this.state.prototypes = {}; 
-            this.state.kernel = this.kernel.kernel.kernel;            
+            this.state.kernel = this.kernel.kernel.kernel; 
+            this.state.lights = {};           
  
             // turns on logger debugger console messages 
             this.debug = {
@@ -192,7 +195,7 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
                     }
                 }               
             } else if(protos && isLightDefinition.call(this,protos)) {
-                node = this.state.nodes[childID] = {
+                node = this.state.nodes[ childID ] = this.state.lights[ childID ] = {
                     name: childName,
                     threeObject: threeChild,
                     ID: childID,
@@ -200,7 +203,7 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
                     type: childExtendsID,
                     sourceType: childType,
                 };
-                if(!node.threeObject)
+                if( !node.threeObject )
                 {
                     createLight.call(this,nodeID,childID,childName);
                 }
@@ -383,12 +386,14 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
         initializingNode: function( nodeID, childID, childExtendsID, childImplementsIDs,
             childSource, childType, childIndex, childName ) {
             var myNode = this.state.nodes[childID];
-            if ( myNode && !( myNode.threeObject instanceof THREE.Material ) ) {
-                generateNodeMaterial.call( this, childID, myNode );//Potential node, need to do node things!
-            }
+            
             if ( this.debug.initializing ) {
                 this.logger.infox( "initializingNode", nodeID, childID, childExtendsID, childImplementsIDs, childSource, childType, childName );
             } 
+
+            if ( myNode && !( myNode.threeObject instanceof THREE.Material ) ) {
+                generateNodeMaterial.call( this, childID, myNode );//Potential node, need to do node things!
+            }
         },
          
         // -- deletingNode -------------------------------------------------------------------------
@@ -1192,9 +1197,10 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
                             }
 
                             if ( lightsFound == 0 ) {
-                                var ambientlight = new THREE.AmbientLight( '#000000' );
-                                ambientlight.color.setRGB( vwfColor.red()/255, vwfColor.green()/255, vwfColor.blue()/255 );
-                                node.threeScene.add( ambientlight );
+                                node.ambientlight = new THREE.AmbientLight( '#000000' );
+                                node.ambientlight.color.setRGB( vwfColor.red()/255, vwfColor.green()/255, vwfColor.blue()/255 );
+                                node.threeScene.add( node.ambientlight );
+                                this.state.lights[ node.nodeID ] = node.ambientlight;
                             }
                             value = vwfColor.toString();
                         }
@@ -1746,6 +1752,12 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
         // == ticking =============================================================================
 
         ticking: function( vwfTime ) {
+            if ( this.state.appInitialized && checkLights ) {
+                if ( lightCount.call( this ) == 0 ) {
+                    createDefaultLighting.call( this );
+                }
+                checkLights = false;    
+            }
         }
 
     } );
@@ -3691,6 +3703,45 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
         }       
         return ret;
     }
+
+    function lightCount() {
+        var count = 0;
+        for ( var id in this.state.lights ) {
+            count++;
+        }
+        return count;
+    }
+    function createDefaultLighting() {
+        var sceneID = this.kernel.application();
+        var light1 = {
+            "extends": "http://vwf.example.com/light.vwf",
+            "properties": {
+              "lightType": "point",
+              "enable": true,
+              "distance": 2000,
+              "intensity": 2,
+              "color": [ 128, 128, 128 ],
+              "translation": [ -400, 400, -900 ]
+            }
+        }
+        this.kernel.createChild( sceneID, "DirectionalLight1", light1 );
+
+        var light2 = {
+            "extends": "http://vwf.example.com/light.vwf",
+            "properties": {
+              "lightType": "point",
+              "enable": true,
+              "distance": 2000,
+              "intensity": 2,
+              "color": [ 128, 128, 128 ],
+              "translation": [ 400, 400, 900 ]
+            }
+        }
+        this.kernel.createChild( sceneID, "DirectionalLight2", light2 );
+
+        this.kernel.setProperty( sceneID, "ambientColor", [ 50, 50, 50 ] );
+    }
+
     function SetVisible(node,state) 
     {
         if(node)
