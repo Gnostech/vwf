@@ -82,7 +82,6 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
                 "getting": false,
                 "prototypes": false
             };
-
         },
 
 
@@ -1752,16 +1751,10 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
         // == ticking =============================================================================
 
         ticking: function( vwfTime ) {
+            
             if ( this.state.appInitialized && checkLights ) {
                 
-                var lightsInScene;
-                // temp code for testing
-                if ( this.state.scenes[ this.kernel.application() ] ) {
-                    var scene = this.state.scenes[ this.kernel.application() ];
-                    if ( scene.threeScene ) {
-                        lightsInScene = sceneLights.call( this, scene.threeScene );
-                    }
-                }
+                var lightsInScene = sceneLights.call( this, getThreeScene.call( this ) );
 
                 createDefaultLighting.call( this, lightsInScene );
                 checkLights = false;    
@@ -1811,6 +1804,16 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
                 }
                 return ptID;
             } 
+        }
+        return undefined;
+    }
+
+    function getThreeScene( id ) {
+        if ( id === undefined ) {
+            id = this.kernel.application();
+        }
+        if ( this.state.scenes[ id ] ) {
+            return this.state.scenes[ id ].threeScene;
         }
         return undefined;
     }
@@ -3756,48 +3759,73 @@ define( [ "module", "vwf/model", "vwf/utility", "vwf/utility/color" ], function(
     }
 
     function createDefaultLighting( lights ) {
+        var createComponents = false;
         var sceneID = this.kernel.application();
         var ambientCount = lights.ambientLights.length;
         var lightCount = lights.spotLights.length + lights.directionalLights.length + lights.pointLights.length;
         
-        //console.info( "ambientCount = " + ambientCount + "      lightCount = " + lightCount );
+        console.info( "ambientCount = " + ambientCount + "      lightCount = " + lightCount );
 
-        if ( lightCount == 0 ) {
+        if ( createComponents ) {
 
-            //console.info( " ++ creating directional lights"  );
+            if ( lightCount == 0 ) {
+
+                //console.info( " ++ creating directional lights"  );
+                
+                var light1 = {
+                    "extends": "http://vwf.example.com/light.vwf",
+                    "properties": {
+                      "lightType": "directional",
+                      "enable": true,
+                      "distance": 2000,
+                      "intensity": 2,
+                      "color": [ 128, 128, 128 ],
+                      "rotation": [ 0, 1, 0, 225 ]
+                    }
+                }
+                this.kernel.createChild( sceneID, "directionalLight1", light1 );
+
+                var light2 = {
+                    "extends": "http://vwf.example.com/light.vwf",
+                    "properties": {
+                      "lightType": "directional",
+                      "enable": true,
+                      "distance": 2000,
+                      "intensity": 2,
+                      "color": [ 128, 128, 128 ],
+                      "rotation": [ 0, 1, 0, 45 ]
+                    }
+                }
+                this.kernel.createChild( sceneID, "directionalLight2", light2 );
+            }
+
+            if ( ambientCount == 0 ) {
+
+                this.kernel.setProperty( sceneID, "ambientColor", [ 50, 50, 50 ] );
+
+            }
+
+        } else {
             
-            var light1 = {
-                "extends": "http://vwf.example.com/light.vwf",
-                "properties": {
-                  "lightType": "point",
-                  "enable": true,
-                  "distance": 2000,
-                  "intensity": 2,
-                  "color": [ 128, 128, 128 ],
-                  "translation": [ -400, 400, -900 ]
-                }
+            var scene = getThreeScene.call( this );
+
+            if ( lightCount == 0 ) {
+                
+                var light1 = new THREE.DirectionalLight( '808080', 2 );
+                var light2 = new THREE.DirectionalLight( '808080', 2 );
+
+                light1.distance = light2.distance = 2000;
+
+                scene.add( light1 );
+                scene.add( light2 );
+
+                light1.rotation.setFromQuaternion( new THREE.Quaternion( 0, 1, 0, 225 ) );
+                light2.rotation.setFromQuaternion( new THREE.Quaternion( 0, 1, 0, 45 ) );
             }
-            this.kernel.createChild( sceneID, "directionalLight1", light1 );
 
-            var light2 = {
-                "extends": "http://vwf.example.com/light.vwf",
-                "properties": {
-                  "lightType": "point",
-                  "enable": true,
-                  "distance": 2000,
-                  "intensity": 2,
-                  "color": [ 128, 128, 128 ],
-                  "translation": [ 400, 400, 900 ]
-                }
-            }
-            this.kernel.createChild( sceneID, "directionalLight2", light2 );
-        }
-
-        if ( ambientCount == 0 ) {
-
-            //console.info( " ++ creating ambient lights"  );
-
-            this.kernel.setProperty( sceneID, "ambientColor", [ 50, 50, 50 ] );
+            if ( ambientCount == 0 ) {
+                createAmbientLight.call( this, scene, [ 0.20, 0.20, 0.20 ] );
+            }            
         }
     }
 
