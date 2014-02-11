@@ -977,17 +977,6 @@ future.hasOwnProperty( eventName ) ||  // TODO: calculate so that properties tak
 
         var self = this;
 
-        // Normalize `eventNamespace` to `undefined` if passed as an empty array or string or is
-        // otherwise falsy. Wrap a lone string in an array.
-
-        if ( eventNamespace && eventNamespace.length ) {
-            if ( ! ( eventNamespace instanceof Array ) ) {
-                eventNamespace = [ eventNamespace ];
-            }
-        } else {
-            eventNamespace = undefined;
-        }
-
         Object.defineProperty( container, eventName, {
 
             get: eventNamespace ? undefined : function() {  // `this` is the container
@@ -1000,22 +989,23 @@ future.hasOwnProperty( eventName ) ||  // TODO: calculate so that properties tak
 
             set: unsettable ? undefined : function( value ) {  // `this` is the container
                 var node = this.node || this;  // the node via node.*collection*.node, or just node
+                var namespacedName = eventNamespace ? [ eventNamespace, eventName ] : eventName;
                 if ( typeof value == "function" || value instanceof Function ) {
-                    kernelDotAddEventListener.call( self, node.id, eventNamespace, eventName,
+                    self.kernel.addEventListener.call( self, node.id, namespacedName,
                         value, node.id );  // for container.*event* = function() { ... }, context is the target node
                 } else if ( value.add ) {
                     if ( ! value.phases || value.phases instanceof Array ) {
-                        kernelDotAddEventListener.call( self, node.id, eventNamespace, eventName,
+                        self.kernel.addEventListener.call( self, node.id, namespacedName,
                             value.handler, value.context && value.context.id, value.phases );
                     } else {
-                        kernelDotAddEventListener.call( self, node.id, eventNamespace, eventName,
+                        self.kernel.addEventListener.call( self, node.id, namespacedName,
                             value.handler, value.context && value.context.id, [ value.phases ] );
                     }
                 } else if ( value.remove ) {
-                    kernelDotRemoveEventListener.call( self, node.id, eventNamespace, eventName,
+                    self.kernel.removeEventListener.call( self, node.id, namespacedName,
                         value.handler );
                 } else if ( value.flush ) {
-                    kernelDotFlushEventListeners.call( self, node.id, eventNamespace, eventName,
+                    self.kernel.flushEventListeners.call( self, node.id, namespacedName,
                         value.context && value.context.id );
                 }
             },
@@ -1024,46 +1014,6 @@ future.hasOwnProperty( eventName ) ||  // TODO: calculate so that properties tak
 
         } );
 
-    }
-
-    // Stand-in for a namespace-aware kernel.createEvent().
-
-    function kernelDotCreateEvent( nodeID, eventNamespace, eventName, eventParameters ) {
-        this.kernel.createEvent( nodeID, namespacedEventName( eventNamespace, eventName ), eventParameters );
-    }
-
-    // Stand-in for a namespace-aware kernel.fireEvent().
-
-    function kernelDotFireEvent( nodeID, eventNamespace, eventName, eventParameters ) {
-        this.kernel.fireEvent( nodeID, namespacedEventName( eventNamespace, eventName ), eventParameters );
-    }
-
-    // Stand-in for a namespace-aware kernel.dispatchEvent().
-
-    function kernelDotDispatchEvent( nodeID, eventNamespace, eventName, eventParameters, eventNodeParameters ) {
-        this.kernel.dispatchEvent( nodeID, namespacedEventName( eventNamespace, eventName ), eventParameters, eventNodeParameters );
-    }
-
-    // Stand-in for a namespace-aware kernel.addEventListener().
-
-    function kernelDotAddEventListener( nodeID, eventNamespace, eventName, eventHandler, eventContextID, eventPhases ) {
-        this.addingEventListener( nodeID, namespacedEventName( eventNamespace, eventName ), eventHandler, eventContextID, eventPhases );
-    }
-
-    // Stand-in for a namespace-aware kernel.removeEventListener().
-
-    function kernelDotRemoveEventListener( nodeID, eventNamespace, eventName, eventHandler ) {
-        this.removingEventListener( nodeID, namespacedEventName( eventNamespace, eventName ), eventHandler );
-    }
-
-    // Stand-in for a namespace-aware kernel.flushEventListeners().
-
-    function kernelDotFlushEventListeners( nodeID, eventNamespace, eventName, eventContextID ) {
-        this.flushingEventListeners( nodeID, namespacedEventName( eventNamespace, eventName ), eventContextID );
-    }
-
-    function namespacedEventName( eventNamespace, eventName ) {
-        return ( eventNamespace ? ( "vwf$" + eventNamespace.join( "$" ) + "$" ) : "" ) + eventName;
     }
 
     // -- getterScript -----------------------------------------------------------------------------
